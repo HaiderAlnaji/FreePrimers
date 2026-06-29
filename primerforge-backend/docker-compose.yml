@@ -1,0 +1,16 @@
+services:
+  primerforge-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist BLAST databases across container rebuilds. Run
+      #   docker compose run --rm primerforge-api bash scripts/build_databases.sh
+      # once to populate this volume.
+      - blastdb:/data/blastdb
+    environment:
+      - PRIMERFORGE_BLAST_DB_DIR=/data/blastdb
+      - PRIMERFORGE_CORS_ORIGINS=*
+
+volumes:
+  blastdb:

@@ -1,0 +1,11 @@
+# Pinned to a known-compatible FastAPI + Starlette pair. FastAPI 0.137.x with
+# newer Starlette silently fails to register routers (include_router no-ops),
+# which makes every /engines, /thermo, /specificity endpoint return 404.
+fastapi==0.115.6
+starlette==0.41.3
+uvicorn[standard]==0.32.1
+pydantic==2.13.4
+primer3-py==2.3.0
+ViennaRNA==2.7.2
+httpx==0.28.1
+requests>=2.28
