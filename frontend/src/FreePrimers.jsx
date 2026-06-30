@@ -364,9 +364,29 @@ function designStandard(template, p, exonContext = null) {
   };
 
   // Should this primer pass the exon filter?
+  // Does a primer span the junction between two SPECIFIC adjacent exons?
+  const spansSpecificJunction = (start, end, exA, exB) => {
+    if (!exons) return false;
+    const lo = Math.min(exA, exB), hi = Math.max(exA, exB);
+    let sawLo = false, sawHi = false;
+    for (let i = start; i < end; i++) {
+      if (exonOf[i] === lo) sawLo = true;
+      if (exonOf[i] === hi) sawHi = true;
+    }
+    return sawLo && sawHi;
+  };
+
   const primerOk = (start, end, role) => {
     if (!exons || strategy === "any_exon") return allExonic(start, end);
     if (strategy === "junction") {
+      // If the user selected 2 exons, only accept a primer that spans
+      // THAT specific junction (or sits fully inside one of the two).
+      if (selectedExons.length === 2) {
+        const [exA, exB] = selectedExons;
+        if (spansSpecificJunction(start, end, exA, exB)) return true;
+        const myExon = primerExonNum(start, end);
+        return allExonic(start, end) && (myExon === exA || myExon === exB);
+      }
       return allExonic(start, end) || spansJunction(start, end);
     }
     if (strategy === "neighboring") {
@@ -414,9 +434,22 @@ function designStandard(template, p, exonContext = null) {
     // Strategy-specific pair validation
     if (exons) {
       if (strategy === "junction") {
-        const fSpan = spansJunction(f.start, f.end);
-        const rSpan = spansJunction(r.bindStart, r.bindEnd);
-        if (!fSpan && !rSpan) continue;
+        if (selectedExons.length === 2) {
+          const [exA, exB] = selectedExons;
+          // At least one primer must span THIS specific junction
+          const fSpan = spansSpecificJunction(f.start, f.end, exA, exB);
+          const rSpan = spansSpecificJunction(r.bindStart, r.bindEnd, exA, exB);
+          if (!fSpan && !rSpan) continue;
+          // Both primers must stay within the two selected exons
+          const okExon = (n) => n === exA || n === exB || n === null;
+          // (null happens only for a junction-spanning primer, already allowed)
+          if (!okExon(f.exonNum) && !fSpan) continue;
+          if (!okExon(r.exonNum) && !rSpan) continue;
+        } else {
+          const fSpan = spansJunction(f.start, f.end);
+          const rSpan = spansJunction(r.bindStart, r.bindEnd);
+          if (!fSpan && !rSpan) continue;
+        }
       }
       if (strategy === "neighboring") {
         if (selectedExons.length === 2) {
@@ -441,7 +474,9 @@ function designStandard(template, p, exonContext = null) {
   pairs.sort((a, b) => a.score - b.score);
   if (!pairs.length) {
     const stratMsg = strategy === "junction"
-      ? " No junction-spanning primers found — try 'Neighboring exons' strategy or fetch a region with more exons."
+      ? (selectedExons.length === 2
+          ? ` No junction primer found spanning E${selectedExons[0]}/E${selectedExons[1]}. Try a different exon pair, widen the amplicon range, or switch to 'Neighboring exons'.`
+          : " No junction-spanning primers found — select two adjacent exons on the map, or fetch a transcript with more exons.")
       : strategy === "neighboring" && selectedExons.length === 2
         ? ` No pairs found between E${selectedExons[0]} and E${selectedExons[1]}. Try selecting adjacent exons.`
         : "";
@@ -2628,7 +2663,9 @@ function ExonMap({ exons, seqLen, strategy, onStrategyChange, selectedExons, onS
             <p className="mt-2 text-[10px] text-amber-600">Select 2 neighboring exons from the bar above — forward primer will target the first, reverse the second.</p>
           )}
           {strategy === "junction" && (
-            <p className="mt-2 text-[10px] text-slate-500">Junction-spanning is enforced automatically. If no junction primer can be found, the engine falls back to a warning — switch to Neighboring exons strategy if this happens.</p>
+            <p className="mt-2 text-[10px] text-slate-500">{selectedExons.length === 2
+              ? `Designing junction primers across E${selectedExons[0]}/E${selectedExons[1]} only. Clear the selection to allow any junction.`
+              : "Select two adjacent exons on the map above to target a specific splice junction, or leave unselected to let the engine pick any junction."}</p>
           )}
         </div>
       )}
